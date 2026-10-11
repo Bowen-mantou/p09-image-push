@@ -4,11 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       batch:
-        description: 'batch file index (0-3)'
+        description: 'batch file (images_acr_NN / images_ghcr_NN)'
         required: false
-        default: '0'
+        default: 'images'
+      target:
+        description: 'push target: acr | ghcr'
+        required: false
+        default: 'ghcr'
       ns:
-        description: 'ACR namespace (codingagent1/2/3)'
+        description: 'ACR namespace (target=acr 时生效)'
         required: false
         default: 'codingagent1'
   push:
@@ -66,9 +70,9 @@ jobs:
     - name: Select batch
       run: |
         BATCH="${{ github.event.inputs.batch }}"
-        if [ -f "images_batch_test.txt" ]; then
-          cp "images_batch_test.txt" images.txt
-          echo "using images_batch_test.txt"
+        if [ -f "$BATCH.txt" ]; then
+          cp "$BATCH.txt" images.txt
+          echo "using $BATCH.txt"
         else
           echo "using default images.txt"
         fi
@@ -76,12 +80,22 @@ jobs:
     - name: Docker Setup Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Build and push image to ghcr
+    - name: Build and push image
       run: |
         # p09: dockerhub 认证（PAT，绕开匿名限流）
         echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USER" --password-stdin docker.io
-        # ghcr 认证（GITHUB_TOKEN 自带 packages:write）
-        echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+        TARGET="${{ github.event.inputs.target }}"
+        if [ "$TARGET" = "acr" ]; then
+          docker login -u $ALIYUN_REGISTRY_USER -p $ALIYUN_REGISTRY_PASSWORD $ALIYUN_REGISTRY
+          if [ -n "${{ github.event.inputs.ns }}" ]; then
+            ALIYUN_NAME_SPACE="${{ github.event.inputs.ns }}"
+          fi
+          echo "target=acr ns=$ALIYUN_NAME_SPACE"
+        else
+          # ghcr 认证（GITHUB_TOKEN 自带 packages:write）
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "target=ghcr"
+        fi
         # p09: 命名空间选择（workflow_dispatch 输入优先）
         if [ -n "${{ github.event.inputs.ns }}" ]; then
           ALIYUN_NAME_SPACE="${{ github.event.inputs.ns }}"
@@ -171,7 +185,11 @@ jobs:
             
             # 将@sha256:等字符删除
             image_name_tag="${image_name_tag%%@*}"
-            new_image="ghcr.io/bowen-mantou/$platform_prefix$name_space_prefix$image_name_tag"
+            if [ "$TARGET" = "acr" ]; then
+              new_image="$ALIYUN_REGISTRY/$ALIYUN_NAME_SPACE/$platform_prefix$name_space_prefix$image_name_tag"
+            else
+              new_image="ghcr.io/bowen-mantou/$platform_prefix$name_space_prefix$image_name_tag"
+            fi
             echo "docker tag docker.io/$image $new_image"
             docker tag docker.io/$image $new_image
             echo "docker push $new_image"
