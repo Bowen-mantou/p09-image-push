@@ -32,6 +32,9 @@ jobs:
   build:
     name: Pull
     runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
     steps:
     - name: Before freeing up disk space
       run: |
@@ -93,7 +96,7 @@ jobs:
           echo "target=acr ns=$ALIYUN_NAME_SPACE"
         else
           # ghcr 认证（GITHUB_TOKEN 自带 packages:write）
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.repository_owner }}" --password-stdin
           echo "target=ghcr"
         fi
         # p09: 命名空间选择（workflow_dispatch 输入优先）
