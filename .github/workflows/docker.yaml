@@ -152,17 +152,22 @@ jobs:
             fi
         
             echo "docker pull docker.io/$line"
-            # 限流自愈：toomanyrequests 睡 300s，其余 20s，最多 6 轮
-            for try in 1 2 3 4 5 6; do
-              if docker pull docker.io/$line 2> /tmp/pull_err.txt; then break; fi
+            # 限流自愈：toomanyrequests 睡 300s，其余 60s，最多 8 轮
+            PULLED=0
+            for try in 1 2 3 4 5 6 7 8; do
+              if docker pull docker.io/$line 2> /tmp/pull_err.txt; then PULLED=1; break; fi
               if grep -q 'toomanyrequests' /tmp/pull_err.txt 2>/dev/null; then
                 echo "rate limited; sleep 300"
                 sleep 300
               else
-                echo "pull retry $try failed; sleep 20"
-                sleep 20
+                echo "pull retry $try failed; sleep 60"
+                sleep 60
               fi
             done
+            if [ "$PULLED" != "1" ]; then
+              echo "SKIP $line (pull failed after retries)"
+              continue
+            fi
             platform=$(echo "$line" | awk -F'--platform[ =]' '{if (NF>1) print $2}' | awk '{print $1}')
             echo "platform is $platform"
             # 如果存在架构信息 将架构信息拼到镜像名称前面
