@@ -73,7 +73,7 @@ jobs:
     - name: Select batch
       run: |
         BATCH="${{ github.event.inputs.batch }}"
-        if [ -f "$BATCH.txt" ]; then
+        if [ -n "$BATCH" ] && [ "$BATCH" != "images" ] && [ -f "$BATCH.txt" ]; then
           cp "$BATCH.txt" images.txt
           echo "using $BATCH.txt"
         else
